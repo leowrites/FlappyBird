@@ -5,9 +5,14 @@ import neat
 
 # main class
 
+# global keyword: you need it to assign, not required when reading
 
 pygame.init()
 screen = pygame.display.set_mode((288, 512))
+pygame.font.init()
+game_font = pygame.font.Font("assets/04b_19/04B_19__.TTF", 20)
+highest_score_font = pygame.font.Font("assets/04b_19/04B_19__.TTF", 40)
+pygame.display.set_caption("Flappy Bird by Leo")
 # width and height of window
 clock = pygame.time.Clock()
 # you need to put this on the display surface when you have an image
@@ -20,10 +25,11 @@ pygame.time.set_timer(SPAWNPIPE, 1000)
 BIRDFLAP = pygame.USEREVENT + 1
 pygame.time.set_timer(BIRDFLAP, 200)
 # Game variables
-gravity = 0.25
+gravity = 0.5
 game_active = True
 bird_amount = 0
-
+highest_score = 0
+# images
 bird_image1 = pygame.image.load('assets/bluebird-midflap.png').convert()
 bird_image2 = pygame.image.load('assets/bluebird-upflap.png').convert()
 bird_image3 = pygame.image.load('assets/bluebird-downflap.png').convert()
@@ -36,18 +42,20 @@ background_surface = pygame.image.load('assets/background-day.png').convert()
 floor_surface = pygame.image.load('assets/base.png').convert()
 floor_x_pos = 0
 pipe_surface = pygame.image.load('assets/pipe-green.png').convert()
+next_top_pipe = None
 
 
 class Bird:
     bird_rect = bird_image1.get_rect(center=(50, 256))
     bird_image = bird_images
+    my_score = 0
 
     def __init__(self):
         self.velocity_y = 0
         self.image_index = 0
         self.bird_surface = bird_images[self.image_index]
         self.rect = self.bird_rect
-        self.rect.y = 256
+        self.my_score = self.my_score
 
     def move_bird(self):
         self.rect.centery += self.velocity_y
@@ -70,6 +78,19 @@ class Bird:
     def animation(self):
         self.bird_surface = bird_images[self.image_index]
 
+    def pass_pipe(self):
+        global next_top_pipe
+        if next_top_pipe is not None and self.bird_rect.centerx >= next_top_pipe.centerx:
+            self.my_score += 1
+            next_top_pipe = None
+
+    def game_over_animation(self):
+        velocity_x = 1
+        self.rect.x += velocity_x
+        if self.rect.x >= 300:
+            self.rect.x = -20
+        self.draw_bird()
+
 
 def draw_floor():
     screen.blit(floor_surface, (floor_x_pos, 450))
@@ -88,10 +109,12 @@ def reset_floor_position():
 
 
 def create_pipe():
+    global next_top_pipe
     random_pipe_pos = random.choice(pipe_height)
     bottom_pipe = pipe_surface.get_rect(midtop=(300, random_pipe_pos))
     top_pipe = pipe_surface.get_rect(midbottom=(300, random_pipe_pos - 150))
     pipes = (bottom_pipe, top_pipe)
+    next_top_pipe = top_pipe
     return pipes
     # this creates an event that will be triggered every 1 second
 
@@ -113,6 +136,20 @@ def move_pipe(pipes):
     return pipes
 
 
+def show_score(score, state):
+    if state:
+        score_surface = game_font.render("Score: {}".format(score), False, (255, 255, 255))
+        score_surface_rect = score_surface.get_rect(center=(144, 50))
+        screen.blit(score_surface, score_surface_rect)
+    if not state:
+        game_over_surface = highest_score_font.render("Game Over", False, (255, 255, 255))
+        game_over_rect = game_over_surface.get_rect(center=(144, 150))
+        highest_score_surface = highest_score_font.render("Highest: {}".format(highest_score), False, (255, 255, 255))
+        highest_score_rect = highest_score_surface.get_rect(center=(144, 200))
+        screen.blit(game_over_surface, game_over_rect)
+        screen.blit(highest_score_surface, highest_score_rect)
+
+
 first = True
 bird1 = None
 
@@ -131,7 +168,10 @@ while True:
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_SPACE:
                 if not game_active:
+                    my_score = 0
                     bird1 = Bird()
+                    bird1.bird_rect.x = 56
+                    bird1.bird_rect.y = 288
                     pipe_list.clear()
                     game_active = True
                 else:
@@ -159,8 +199,17 @@ while True:
         bird1.move_bird()
         bird1.draw_bird()
         game_active = bird1.collision_detection(pipe_list)
+        if not game_active:
+            if bird1.my_score > highest_score:
+                highest_score = bird1.my_score
+        bird1.pass_pipe()
 
     # floor
+    if not game_active:
+        bird1.bird_rect.y = 256
+        bird1.velocity_y = 0
+        bird1.game_over_animation()
+    show_score(bird1.my_score, game_active)
     move_floor()
     draw_floor()
     reset_floor_position()
